@@ -11,12 +11,12 @@ import argparse
 import numpy as np
 from torch import nn, optim
 from lib.metrics import ValidationFunction, get_nearestneighbors, sanitize
-from lib.net import Normalize, forward_pass, StraightThroughQuantizer
+from lib.net import forward_pass, StraightThroughQuantizer
 from lib.quantizers import Zn
 import torch.nn.functional as F
 import torch
 import itertools
-
+from model import createNet
 
 def repeat(l, r):
     return list(itertools.chain.from_iterable(itertools.repeat(x, r) for x in l))
@@ -170,6 +170,10 @@ def triplet_optimize(xt, gt_nn, net, args, val_func):
 
     return all_logs
 
+def boolify(x):
+    assert x in ["yes", "no"]
+
+    return x == "yes"
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -185,8 +189,10 @@ if __name__ == '__main__':
        help="nb of learning vectors")
 
     group = parser.add_argument_group('Model hyperparameters')
-    aa("--dint", type=int, default=1024,
-       help="size of hidden states")
+    aa("--arch", type=str, default="512-512")
+    aa("--residual", type=boolify, default=False)
+    aa("--batch_norm", type=boolify, default=False)
+    aa("--post_act", type=boolify, default=True)
     aa("--dout", type=int, default=16,
        help="output dimension")
     aa("--lambda_uniform", type=float, default=0.05,
@@ -254,18 +260,21 @@ if __name__ == '__main__':
     print ("build network")
 
     dim = xb.shape[1]
-    dint, dout = args.dint, args.dout
+    # dint, dout = args.dint, args.dout
 
-    net = nn.Sequential(
-        nn.Linear(in_features=dim, out_features=dint, bias=True),
-        nn.BatchNorm1d(dint),
-        nn.ReLU(),
-        nn.Linear(in_features=dint, out_features=dint, bias=True),
-        nn.BatchNorm1d(dint),
-        nn.ReLU(),
-        nn.Linear(in_features=dint, out_features=dout, bias=True),
-        Normalize()
-    )
+    args.arch = str(dim) + "-" + args.arch + "-" + str(args.dout)
+    net = createNet(args.arch, args.residual, args.batch_norm, args.post_act)
+    print(net)
+    # net = nn.Sequential(
+    #     nn.Linear(in_features=dim, out_features=dint, bias=True),
+    #     nn.BatchNorm1d(dint),
+    #     nn.ReLU(),
+    #     nn.Linear(in_features=dint, out_features=dint, bias=True),
+    #     nn.BatchNorm1d(dint),
+    #     nn.ReLU(),
+    #     nn.Linear(in_features=dint, out_features=dout, bias=True),
+    #     Normalize()
+    # )
 
     if args.init_name != '':
         print ("loading state from %s" % args.init_name)
